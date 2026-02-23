@@ -11,7 +11,7 @@ import (
 
 func main() {
 
-	cfg := config.Load()
+	cfg, err := config.Load()
 
 	client := deepgram.NewClient(
 		cfg.DeepgramAPIKey,

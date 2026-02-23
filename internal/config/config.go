@@ -2,6 +2,7 @@ package config
 
 import (
 	"bufio"
+	"fmt"
 	"log"
 	"os"
 	"strings"
@@ -12,16 +13,38 @@ type Config struct {
 	DeepgramModel  string
 }
 
-func Load() *Config {
+func Load() (*Config, error) {
 	loadEnvFile(".env")
 
-	return &Config{
+	config := &Config{
 		DeepgramAPIKey: os.Getenv("DEEPGRAM_API_KEY"),
-		DeepgramModel:  os.Getenv("DEEPGRAM_MODEL"),
+		DeepgramModel:  getEnvOrDefault("DEEPGRAM_MODEL", "nova-2"),
 	}
+
+	if err := config.Validate(); err != nil {
+		return nil, err
+	}
+
+	return config, nil
 }
 
-// loadEnvFile reads a .env file and sets environment variables
+func (c *Config) Validate() error {
+	if c.DeepgramAPIKey == "" {
+		return fmt.Errorf("DEEPGRAM_API_KEY is required")
+	}
+	if c.DeepgramModel == "" {
+		return fmt.Errorf("DEEPGRAM_MODEL is required")
+	}
+	return nil
+}
+
+func (c *Config) Print() {
+	log.Println("=== Configuration ===")
+	log.Printf("DEEPGRAM_API_KEY: %s", maskKey(c.DeepgramAPIKey))
+	log.Printf("DEEPGRAM_MODEL: %s", c.DeepgramModel)
+	log.Println("====================")
+}
+
 func loadEnvFile(filename string) {
 	file, err := os.Open(filename)
 	if err != nil {
@@ -34,12 +57,10 @@ func loadEnvFile(filename string) {
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
 
-		// Skip empty lines and comments
 		if line == "" || strings.HasPrefix(line, "#") {
 			continue
 		}
 
-		// Split on first '=' only
 		parts := strings.SplitN(line, "=", 2)
 		if len(parts) != 2 {
 			continue
@@ -47,28 +68,25 @@ func loadEnvFile(filename string) {
 
 		key := strings.TrimSpace(parts[0])
 		value := strings.TrimSpace(parts[1])
-
-		// Remove surrounding quotes if present
 		value = strings.Trim(value, `"'`)
 
 		os.Setenv(key, value)
 	}
-
-	if err := scanner.Err(); err != nil {
-		log.Printf("Error reading .env file: %v", err)
-	}
 }
 
-// ```
+func getEnvOrDefault(key, defaultValue string) string {
+	if value := os.Getenv(key); value != "" {
+		return value
+	}
+	return defaultValue
+}
 
-// This implementation:
-// - Uses only Go standard library (`bufio`, `os`, `strings`)
-// - Handles comments (lines starting with `#`)
-// - Strips quotes from values
-// - Skips malformed lines gracefully
-// - Is completely dependency-free
-
-// Your `.env` file would look like:
-// ```
-// DEEPGRAM_API_KEY=your_key_here
-// DEEPGRAM_MODEL=nova-2
+func maskKey(key string) string {
+	if key == "" {
+		return "[NOT SET]"
+	}
+	if len(key) <= 8 {
+		return "****"
+	}
+	return key[:4] + "****" + key[len(key)-4:]
+}
